@@ -1,0 +1,4 @@
+echo ".vscode/" > .gitignore
+echo "*.exe" >> .gitignore
+echo "*.o" >> .gitignore
+echo "*.out" >> .gitignore
