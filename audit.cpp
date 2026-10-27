@@ -6,37 +6,34 @@
 #include "BTreeNode.hpp"
 #include "SHIBTree.hpp"
 
-// Recursive in-order traversal to print physical RAM addresses
+// In-order traversal for RAM layout
 void printMemoryLayout(CartesianNode* node) {
     if (!node) return;
     
-    // Because left/right are TaggedPointers, use .get() to extract the raw physical address
     printMemoryLayout(node->left.get());
     
-    std::cout << "Key: " << std::setw(3) << node->key 
-              << " | Priority: " << std::setw(11) << node->priority 
-              << " | RAM Address: " << static_cast<void*>(node) << "\n";
-              
+    std::cout << "Key: " << std::setw(3) << node->key << " | Priority: " << std::setw(11) << node->priority << " | RAM Address: " << static_cast<void*>(node) << "\n";
+
     printMemoryLayout(node->right.get());
 }
 
 void runAudit(const std::vector<int>& timeline, const std::string& testName) {
     std::cout << "--- " << testName << " ---\n";
-    
-    // Initialize with B=8 (the optimal size from your benchmarks)
-    SHIBTree tree(8); 
-    
-    // Insert keys based on the provided chronological timeline
+
+    // Create a fresh tree for this audit case.
+    SHIBTree tree(8);
+
+    // Insert keys in the order they arrived.
     for (int key : timeline) {
         tree.insert(key);
     }
 
-    // Retrieve the macroscopic root node
-    BTreeNode* rootNode = tree.getGlobalRoot(); 
-    
+    // Get the current root node for inspection.
+    BTreeNode* rootNode = tree.getGlobalRoot();
+
     std::cout << "Final Physical Memory Layout:\n";
-    // Print the microscopic Cartesian partition of the root
-    printMemoryLayout(rootNode->partitionRoot); 
+    // Walk the Cartesian partition rooted at the current global root.
+    printMemoryLayout(rootNode->partitionRoot);
     std::cout << "\n";
 }
 

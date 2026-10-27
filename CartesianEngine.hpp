@@ -28,50 +28,52 @@ inline void flattenAndFree(CartesianNode* node, std::vector<int>& out_keys, Node
     arena.deallocate(node); 
 }
 
-//Right-Spine Stack Algorithm
 inline CartesianNode* ComputeCartesian(const std::vector<int>& sortedKeys, int flankSize, NodePool<CartesianNode, 1024>& arena) {
     int n = sortedKeys.size();
     if (n == 0) return nullptr;
 
-    std::vector<CartesianNode*> nodes(n);
-    std::vector<bool> isProtected(n, false);
+    // Fixed-size stack workspace.
+    CartesianNode* nodes[1024];
+    bool isProtected[1024];
+    int stack[1024];
+    int stackTop = -1;
 
-    //Allocate and flag the flanks
     for (int i = 0; i < n; ++i) {
         nodes[i] = arena.allocate(sortedKeys[i], getPriority(sortedKeys[i]));
-        if (i < flankSize || i >= n - flankSize) {
-            isProtected[i] = true;
-        }
     }
 
-    std::vector<int> stack;
-    stack.reserve(n);
+    std::sort(nodes, nodes + n);
 
-    //Build the tree
+    for (int i = 0; i < n; ++i) {
+        nodes[i]->key = sortedKeys[i];
+        nodes[i]->priority = getPriority(sortedKeys[i]);
+        isProtected[i] = (i < flankSize || i >= n - flankSize);
+    }
+
     for (int i = 0; i < n; ++i) {
         int lastPoppedIdx = -1;
-        
-        while (!stack.empty() && nodes[stack.back()]->priority < nodes[i]->priority) {
-            lastPoppedIdx = stack.back();
-            stack.pop_back();
+
+        while (stackTop >= 0 && nodes[stack[stackTop]]->priority < nodes[i]->priority) {
+            lastPoppedIdx = stack[stackTop];
+            stackTop--;
         }
-        
+
         if (lastPoppedIdx != -1) {
             TaggedPointer<CartesianNode> ptr(nodes[lastPoppedIdx]);
             ptr.setProtected(isProtected[lastPoppedIdx]);
             nodes[i]->left = ptr;
         }
-        
-        if (!stack.empty()) {
+
+        if (stackTop >= 0) {
             TaggedPointer<CartesianNode> ptr(nodes[i]);
             ptr.setProtected(isProtected[i]);
-            nodes[stack.back()]->right = ptr;
+            nodes[stack[stackTop]]->right = ptr;
         }
-        
-        stack.push_back(i);
+
+        stack[++stackTop] = i;
     }
 
-    return nodes[stack.front()]; 
+    return nodes[stack[0]];
 }
 
 // Dynamically inserts a key and recomputes the affected region
