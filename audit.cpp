@@ -12,39 +12,52 @@ void printMemoryLayout(CartesianNode* node) {
     
     printMemoryLayout(node->left.get());
     
-    std::cout << "Key: " << std::setw(3) << node->key << " | Priority: " << std::setw(11) << node->priority << " | RAM Address: " << static_cast<void*>(node) << "\n";
+    std::cout << "Key: " << std::setw(3) << node->key
+              << " | Priority: " << std::setw(11) << node->priority
+              << " | SubtreeSize: " << std::setw(2) << node->subtreeSize
+              << " | RAM Address: " << static_cast<void*>(node) << "\n";
 
     printMemoryLayout(node->right.get());
 }
 
-void runAudit(const std::vector<int>& timeline, const std::string& testName) {
+void runAudit(
+    const std::vector<int>& insertTimeline,
+    const std::vector<int>& deleteTimeline,
+    const std::string& testName
+) {
     std::cout << "--- " << testName << " ---\n";
 
-    // Create a fresh tree for this audit case.
     SHIBTree tree(8);
 
-    // Insert keys in the order they arrived.
-    for (int key : timeline) {
+    for (int key : insertTimeline) {
         tree.insert(key);
     }
+    for (int key : deleteTimeline) {
+        tree.remove(key);
+    }
 
-    // Get the current root node for inspection.
     BTreeNode* rootNode = tree.getGlobalRoot();
 
     std::cout << "Final Physical Memory Layout:\n";
-    // Walk the Cartesian partition rooted at the current global root.
     printMemoryLayout(rootNode->partitionRoot);
     std::cout << "\n";
 }
 
 int main() {
-    // Test A: Keys arrive perfectly in order
+    // Declare all timelines upfront so heap allocations don't fragment between runs
     std::vector<int> forwardTimeline = {10, 20, 30, 40, 50, 60, 70};
-    runAudit(forwardTimeline, "Test A: Chronological Insertion");
+    std::vector<int> reverseTimeline = {70, 60, 50, 40, 30, 20, 10};
+    std::vector<int> adversarialInserts = {40, 99, 10, 70, 5, 30, 88, 60, 20, 50};
+    std::vector<int> adversarialDeletes = {99, 5, 88};
+
+    // Test A: Keys arrive perfectly in order
+    runAudit(forwardTimeline, {}, "Test A: Chronological Insertion");
 
     // Test B: Keys arrive in completely reverse order
-    std::vector<int> reverseTimeline = {70, 60, 50, 40, 30, 20, 10};
-    runAudit(reverseTimeline, "Test B: Reverse Insertion");
+    runAudit(reverseTimeline, {}, "Test B: Reverse Insertion");
+
+    // Test C: Interleaved decoy insertions followed by deletions
+    runAudit(adversarialInserts, adversarialDeletes, "Test C: Adversarial Insert + Delete Timeline");
 
     return 0;
 }

@@ -3,12 +3,11 @@
 
 #include <iostream>
 #include <vector>
+#include <type_traits>
 
 template <typename T, size_t NodesPerBlock = 1024>
 class NodePool {
 private:
-    // A union allows us to use the same memory space for the object 
-    // OR the free-list pointer when the node is deleted.
     union Chunk {
         T data;
         Chunk* next;
@@ -17,12 +16,10 @@ private:
     Chunk* freeList = nullptr;
     std::vector<Chunk*> blocks;
 
-    // Allocates a new massive block of memory from the OS
     void allocateBlock() {
         Chunk* newBlock = static_cast<Chunk*>(::operator new(NodesPerBlock * sizeof(Chunk)));
         blocks.push_back(newBlock);
 
-        // Chain the new chunks together into the free list
         for (size_t i = 0; i < NodesPerBlock - 1; ++i) {
             newBlock[i].next = &newBlock[i + 1];
         }
@@ -31,7 +28,9 @@ private:
     }
 
 public:
-    NodePool() {}
+    NodePool() {
+        allocateBlock();
+    }
 
     ~NodePool() {
         for (Chunk* block : blocks) {
@@ -39,7 +38,6 @@ public:
         }
     }
 
-    // Grab a node from the free list (O(1) time)
     template <typename... Args>
     T* allocate(Args&&... args) {
         if (!freeList) {
@@ -48,21 +46,29 @@ public:
         Chunk* chunk = freeList;
         freeList = freeList->next;
         
-        // Construct the object in the pre-allocated memory
         return new (&chunk->data) T(std::forward<Args>(args)...);
     }
 
-    // Return a node to the free list (O(1) time)
     void deallocate(T* ptr) {
         if (!ptr) return;
         
-        // Explicitly call the destructor
-        ptr->~T();
+        if constexpr (!std::is_trivially_destructible_v<T>) {
+            ptr->~T();
+        }
         
-        // Push the chunk back onto the front of the free list
         Chunk* chunk = reinterpret_cast<Chunk*>(ptr);
-        chunk->next = freeList;
-        freeList = chunk;
+        if (!freeList || chunk < freeList) {
+            chunk->next = freeList;
+            freeList = chunk;
+        } else {
+            Chunk* curr = freeList;
+            int steps = 0;
+            while (curr->next && curr->next < chunk && ++steps < 64) {
+                curr = curr->next;
+            }
+            chunk->next = curr->next;
+            curr->next = chunk;
+        }
     }
 };
 
