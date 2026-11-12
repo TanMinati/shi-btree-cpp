@@ -59,11 +59,7 @@ private:
         newSibling->numKeys = rightCount;
         
         if (!fullNode->isLeaf) {
-<<<<<<< HEAD
-            int childMid = (fullNode->children.size() + 1)/ 2;
-=======
             int childMid = midIdx + 1;
->>>>>>> 9a23e62 (Corrected all traversal errors and made optimizations)
             newSibling->children.assign(fullNode->children.begin() + childMid, fullNode->children.end());
             fullNode->children.erase(fullNode->children.begin() + childMid, fullNode->children.end());
         }
