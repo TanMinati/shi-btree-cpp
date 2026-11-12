@@ -6,19 +6,26 @@
 #include "CartesianNode.hpp"
 
 struct BTreeNode {
-    // 8-byte aligned pointer first to eliminate internal struct padding
+    // Root of the Cartesian partition associated with this node.
     CartesianNode* partitionRoot;
 
-    // Child pointers for internal nodes (24 bytes)
+    // Child pointers for internal nodes.
     std::vector<BTreeNode*> children;
 
+    // Number of keys stored in this node.
     int numKeys;
-    uint16_t level; // Height level i for independent hash function h_i
+
+    // Level of this node in the B-tree.
+    uint16_t level;
+
+    // Indicates whether this node is a leaf.
     bool isLeaf;
 
+    // Constructs a B-tree node.
     BTreeNode(bool leaf, int maxB = 0, uint16_t nodeLevel = 0)
         : partitionRoot(nullptr), numKeys(0), level(nodeLevel), isLeaf(leaf) {
         if (!leaf && maxB > 0) {
+            // Reserve space for the child pointers of an internal node.
             children.reserve(maxB + 2);
         }
     }

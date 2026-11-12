@@ -48,14 +48,10 @@ private:
         int promotedKey = splitKeys[midIdx];
         int rightCount = n - (midIdx + 1);
         
-        fullNode->partitionRoot = ComputeCartesian(
-            splitKeys.data(), midIdx, 0, midIdx, FLANK_SIZE, arena, fullNode->level
-        );
+        fullNode->partitionRoot = ComputeCartesian(splitKeys.data(), midIdx, 0, midIdx, FLANK_SIZE, arena, fullNode->level);
         fullNode->numKeys = midIdx;
         
-        newSibling->partitionRoot = ComputeCartesian(
-            splitKeys.data() + midIdx + 1, rightCount, 0, rightCount, FLANK_SIZE, arena, newSibling->level
-        );
+        newSibling->partitionRoot = ComputeCartesian(splitKeys.data() + midIdx + 1, rightCount, 0, rightCount, FLANK_SIZE, arena, newSibling->level);
         newSibling->numKeys = rightCount;
         
         if (!fullNode->isLeaf) {
@@ -64,9 +60,7 @@ private:
             fullNode->children.erase(fullNode->children.begin() + childMid, fullNode->children.end());
         }
         
-        parent->partitionRoot = RecomputeCartesian(
-            parent->partitionRoot, promotedKey, parent->numKeys, FLANK_SIZE, arena, parent->level
-        );
+        parent->partitionRoot = RecomputeCartesian(parent->partitionRoot, promotedKey, parent->numKeys, FLANK_SIZE, arena, parent->level);
         parent->numKeys++;
         
         parent->children.insert(parent->children.begin() + childIdx + 1, newSibling);
@@ -76,9 +70,7 @@ private:
     void insertNonFull(BTreeNode* node, int key) {
         if (node->isLeaf) {
             bool inserted = false;
-            node->partitionRoot = RecomputeCartesian(
-                node->partitionRoot, key, node->numKeys, FLANK_SIZE, arena, node->level, &inserted
-            );
+            node->partitionRoot = RecomputeCartesian(node->partitionRoot, key, node->numKeys, FLANK_SIZE, arena, node->level, &inserted);
             if (inserted) {
                 node->numKeys++;
             }
@@ -124,9 +116,7 @@ private:
         if (node->isLeaf) {
             if (node->numKeys == 0 || !node->partitionRoot) return false;
             outKey = findMaxKey(node->partitionRoot);
-            node->partitionRoot = RemoveCartesian(
-                node->partitionRoot, outKey, node->numKeys, FLANK_SIZE, arena, node->level
-            );
+            node->partitionRoot = RemoveCartesian(node->partitionRoot, outKey, node->numKeys, FLANK_SIZE, arena, node->level);
             node->numKeys--;
             return true;
         }
@@ -141,9 +131,7 @@ private:
         node->children.pop_back();
 
         outKey = findMaxKey(node->partitionRoot);
-        node->partitionRoot = RemoveCartesian(
-            node->partitionRoot, outKey, node->numKeys, FLANK_SIZE, arena, node->level
-        );
+        node->partitionRoot = RemoveCartesian(node->partitionRoot, outKey, node->numKeys, FLANK_SIZE, arena, node->level);
         node->numKeys--;
         return true;
     }
@@ -180,9 +168,7 @@ private:
         globalRoot->isLeaf = true;
         globalRoot->level = 0;
         globalRoot->numKeys = static_cast<int>(mergedKeys.size());
-        globalRoot->partitionRoot = ComputeCartesian(
-            mergedKeys.data(), globalRoot->numKeys, 0, globalRoot->numKeys, FLANK_SIZE, arena, 0
-        );
+        globalRoot->partitionRoot = ComputeCartesian(mergedKeys.data(), globalRoot->numKeys, 0, globalRoot->numKeys, FLANK_SIZE, arena, 0);
     }
 
 public:
@@ -209,9 +195,7 @@ public:
 
         if (target->isLeaf) {
             bool removed = false;
-            target->partitionRoot = RemoveCartesian(
-                target->partitionRoot, key, target->numKeys, FLANK_SIZE, arena, target->level, &removed
-            );
+            target->partitionRoot = RemoveCartesian(target->partitionRoot, key, target->numKeys, FLANK_SIZE, arena, target->level, &removed);
             if (removed) {
                 target->numKeys--;
             }
