@@ -17,20 +17,20 @@ inline int getPriority(int key, uint64_t level = 0) {
 }
 
 // Helper: collects sorted keys and nodes in ascending address/key order
-inline void flattenCollect(CartesianNode* node, std::vector<int>& out_keys, std::vector<CartesianNode*>& out_nodes) {
+inline void flattenCollect(CartesianNode* node, std::vector<int>& outKeys, std::vector<CartesianNode*>& outNodes) {
     if (!node) return;
-    flattenCollect(node->left.get(), out_keys, out_nodes);
-    out_keys.push_back(node->key);
-    out_nodes.push_back(node);
-    flattenCollect(node->right.get(), out_keys, out_nodes);
+    flattenCollect(node->left.get(), outKeys, outNodes);
+    outKeys.push_back(node->key);
+    outNodes.push_back(node);
+    flattenCollect(node->right.get(), outKeys, outNodes);
 }
 
 // Flattens a sub-tree into a sorted array and frees nodes in descending address order
-inline void flattenAndFree(CartesianNode* node, std::vector<int>& out_keys, NodePool<CartesianNode, 1024>& arena) {
+inline void flattenAndFree(CartesianNode* node, std::vector<int>& outKeys, NodePool<CartesianNode, 1024>& arena) {
     if (!node) return;
     static thread_local std::vector<CartesianNode*> freedNodes;
     freedNodes.clear();
-    flattenCollect(node, out_keys, freedNodes);
+    flattenCollect(node, outKeys, freedNodes);
     for (int i = static_cast<int>(freedNodes.size()) - 1; i >= 0; --i) {
         arena.deallocate(freedNodes[i]);
     }
@@ -43,16 +43,8 @@ inline std::vector<int>& getWorkspaceStack() { static thread_local std::vector<i
 inline std::vector<CartesianNode*>& getWorkspaceAncestors() { static thread_local std::vector<CartesianNode*> v; return v; }
 inline std::vector<int>& getWorkspaceKeys() { static thread_local std::vector<int> v; return v; }
 
-// Zero-copy pointer-slice Cartesian tree constructor
-inline CartesianNode* ComputeCartesian(
-    const int* sortedKeys,
-    int n,
-    int globalOffset,
-    int totalN,
-    int flankSize,
-    NodePool<CartesianNode, 1024>& arena,
-    uint64_t level = 0
-) {
+// Cartesian tree constructor
+inline CartesianNode* ComputeCartesian(const int* sortedKeys,int n,int globalOffset,int totalN,int flankSize,NodePool<CartesianNode, 1024>& arena,uint64_t level = 0) {
     if (n <= 0) return nullptr;
 
     auto& nodes = getWorkspaceNodes();
@@ -65,17 +57,17 @@ inline CartesianNode* ComputeCartesian(
     
     int stackTop = -1;
 
-    // 1. Allocate raw nodes from the arena
+    //Allocate raw nodes from the arena
     for (int i = 0; i < n; ++i) {
         nodes[i] = arena.allocate(0, 0);
     }
 
-    // 2. Sort physical RAM addresses only if not already ordered
+    // Sort physical RAM addresses only if not already ordered
     if (!std::is_sorted(nodes.begin(), nodes.end())) {
         std::sort(nodes.begin(), nodes.end());
     }
 
-    // 3. Single-pass initialization of key, level-seeded priority, and global flank protection
+    // Single-pass initialization of key, level-seeded priority, and global flank protection
     for (int i = 0; i < n; ++i) {
         int k = sortedKeys[i];
         nodes[i]->key = k;
@@ -85,7 +77,7 @@ inline CartesianNode* ComputeCartesian(
         isProtected[i] = (globalIdx < flankSize || globalIdx >= totalN - flankSize) ? 1 : 0;
     }
 
-    // 4. O(n) monotonic stack Cartesian tree construction
+    // O(n) monotonic stack Cartesian tree construction
     for (int i = 0; i < n; ++i) {
         int lastPoppedIdx = -1;
 
@@ -118,32 +110,17 @@ inline CartesianNode* ComputeCartesian(
 }
 
 // Vector wrapper overload
-inline CartesianNode* ComputeCartesian(
-    const std::vector<int>& sortedKeys,
-    int globalOffset,
-    int totalN,
-    int flankSize,
-    NodePool<CartesianNode, 1024>& arena,
-    uint64_t level = 0
-) {
+inline CartesianNode* ComputeCartesian(const std::vector<int>& sortedKeys,int globalOffset,int totalN,int flankSize,NodePool<CartesianNode, 1024>& arena,uint64_t level = 0) {
     return ComputeCartesian(sortedKeys.data(), static_cast<int>(sortedKeys.size()), globalOffset, totalN, flankSize, arena, level);
 }
 
 // Dynamically inserts a key in O(log B) expected time with single-pass duplicate detection
-inline CartesianNode* RecomputeCartesian(
-    CartesianNode* globalRoot,
-    int newKey,
-    int currentSize,
-    int flankSize,
-    NodePool<CartesianNode, 1024>& arena,
-    uint64_t level = 0,
-    bool* outInserted = nullptr
-) {
+inline CartesianNode* RecomputeCartesian(CartesianNode* globalRoot,int newKey,int currentSize,int flankSize,NodePool<CartesianNode, 1024>& arena,uint64_t level = 0,bool* outInserted = nullptr) {
     if (outInserted) *outInserted = true;
 
     auto& keyScratch = getWorkspaceKeys();
     
-    // Small tree (including B=8 audit): full address-sorted rebuild
+    // Small tree 
     if (!globalRoot || currentSize < 2 * flankSize) {
         // Fast check for duplicate before flattening small tree
         CartesianNode* check = globalRoot;
@@ -238,15 +215,7 @@ inline CartesianNode* RecomputeCartesian(
     auto it = std::lower_bound(keyScratch.begin(), keyScratch.end(), newKey);
     keyScratch.insert(it, newKey);
 
-    CartesianNode* newSubroot = ComputeCartesian(
-        keyScratch.data(),
-        static_cast<int>(keyScratch.size()),
-        unprotectedOffset,
-        totalN,
-        flankSize,
-        arena,
-        level
-    );
+    CartesianNode* newSubroot = ComputeCartesian(keyScratch.data(),static_cast<int>(keyScratch.size()),unprotectedOffset,totalN,flankSize,arena,level);
 
     if (parentSubroot) {
         int newSubrootGlobalRank = unprotectedOffset + getSubtreeSize(newSubroot->left.get());
@@ -272,21 +241,12 @@ inline CartesianNode* RecomputeCartesian(
 }
 
 // Dynamically removes a key in O(log B) expected time by rebuilding only the deleted node's subtree
-inline CartesianNode* RemoveCartesian(
-    CartesianNode* globalRoot,
-    int delKey,
-    int currentSize,
-    int flankSize,
-    NodePool<CartesianNode, 1024>& arena,
-    uint64_t level = 0,
-    bool* outRemoved = nullptr
-) {
+inline CartesianNode* RemoveCartesian(CartesianNode* globalRoot,int delKey,int currentSize,int flankSize,NodePool<CartesianNode, 1024>& arena,uint64_t level = 0,bool* outRemoved = nullptr) {
     if (outRemoved) *outRemoved = false;
     if (!globalRoot) return nullptr;
 
     auto& keyScratch = getWorkspaceKeys();
 
-    // Small tree (including B=8 audit): full address-sorted rebuild
     if (currentSize <= 2 * flankSize) {
         keyScratch.clear();
         flattenAndFree(globalRoot, keyScratch, arena);
@@ -334,15 +294,7 @@ inline CartesianNode* RemoveCartesian(
         flattenAndFree(curr->right.get(), keyScratch, arena);
         arena.deallocate(curr);
 
-        replacement = ComputeCartesian(
-            keyScratch.data(),
-            static_cast<int>(keyScratch.size()),
-            leftOffset,
-            totalN,
-            flankSize,
-            arena,
-            level
-        );
+        replacement = ComputeCartesian(keyScratch.data(),static_cast<int>(keyScratch.size()),leftOffset,totalN,flankSize,arena,level);
     }
 
     if (parent) {
